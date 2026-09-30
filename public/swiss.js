@@ -49,7 +49,7 @@ function buildSwissStyle(opts) {
   add({ id: 'lu-wood-edge', type: 'line', source: OSM, 'source-layer': 'landuse', minzoom: 11, filter: eq('class', 'wood'),
     paint: { 'line-color': C.forestEdge, 'line-width': Z(11, 0.4, 15, 1), 'line-opacity': 0.8 } });
   add({ id: 'lu-protected-line', type: 'line', source: OSM, 'source-layer': 'landuse', minzoom: 8, filter: eq('class', 'protected'),
-    paint: { 'line-color': C.parkLine, 'line-width': Z(8, 1, 13, 2.4), 'line-opacity': 0.55 } });
+    paint: { 'line-color': C.parkLine, 'line-width': Z(8, 0.8, 13, 1.6), 'line-opacity': Z(8, 0.45, 13, 0.3) } });
 
   // ---------------------------------------------------------------- relief (swiss shading: blue-grey shadow, warm light)
   add({ id: 'hillshade', type: 'hillshade', source: 'dem', maxzoom: 17,
@@ -100,17 +100,17 @@ function buildSwissStyle(opts) {
   add({ id: 'sw-tunnel', type: 'line', source: OSM, 'source-layer': 'road', filter: all(has('tunnel'), cls('motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor')),
     paint: { 'line-color': '#555', 'line-width': X2(9, 0.5, 15, 2), 'line-dasharray': [2, 1.5], 'line-opacity': 0.6 } });
   add({ id: 'sw-rail', type: 'line', source: OSM, 'source-layer': 'road', filter: all(cls('rail', 'light'), notT),
-    paint: { 'line-color': C.rail, 'line-width': ['case', has('minor'), 0.8, Z(7, 0.8, 14, 2)] } });
+    paint: { 'line-color': C.rail, 'line-width': Z(7, ['case', has('minor'), 0.6, 0.8], 14, ['case', has('minor'), 0.9, 2]) } });
   add({ id: 'sw-subway', type: 'line', source: OSM, 'source-layer': 'road', minzoom: 12, filter: cls('subway'),
     paint: { 'line-color': C.rail, 'line-width': 1, 'line-dasharray': [2, 2], 'line-opacity': 0.6 } });
   add({ id: 'sw-ferry', type: 'line', source: OSM, 'source-layer': 'road', filter: cls('ferry'),
     paint: { 'line-color': C.waterLine, 'line-width': 1, 'line-dasharray': [4, 3] } });
   add({ id: 'sw-runway', type: 'line', source: OSM, 'source-layer': 'road', filter: cls('runway', 'taxiway'),
-    paint: { 'line-color': '#b8b3bd', 'line-width': ['match', ['get', 'class'], 'runway', X2(10, 1, 17, 40), X2(12, 0.5, 17, 10)] } });
+    paint: { 'line-color': '#b8b3bd', 'line-width': X2(10, ['match', ['get', 'class'], 'runway', 1, 0.3], 17, ['match', ['get', 'class'], 'runway', 40, 10]) } });
 
   // ---------------------------------------------------------------- boundaries
   add({ id: 'bnd-town', type: 'line', source: ATL, 'source-layer': 'town', minzoom: 11,
-    paint: { 'line-color': C.canton, 'line-width': 0.7, 'line-dasharray': [4, 2], 'line-opacity': 0.4 } });
+    paint: { 'line-color': C.canton, 'line-width': 0.6, 'line-dasharray': [4, 2], 'line-opacity': 0.28 } });
   add({ id: 'bnd-county', type: 'line', source: ATL, 'source-layer': 'county', minzoom: 7,
     paint: { 'line-color': C.canton, 'line-width': Z(7, 0.8, 12, 1.6), 'line-dasharray': [6, 2, 1, 2], 'line-opacity': 0.55 } });
   add({ id: 'bnd-state', type: 'line', source: ATL, 'source-layer': 'state',

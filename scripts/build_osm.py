@@ -42,11 +42,22 @@ class Out:
         self.f = open(os.path.join(OSM, f't_{name}.geojsonl'), 'wb')
         self.n = 0
 
-    def write(self, layer, minzoom, props, geom):
+    def write(self, layer, minzoom, props, geom, maxzoom=None):
         props = {k: v for k, v in props.items() if v is not None and v != ''}
-        self.f.write(orjson.dumps({'type': 'Feature', 'tippecanoe': {'layer': layer, 'minzoom': int(minzoom)},
-                                   'properties': props, 'geometry': geom}) + b'\n')
+        tc = {'layer': layer, 'minzoom': int(minzoom)}
+        if maxzoom is not None:
+            tc['maxzoom'] = int(maxzoom)
+        self.f.write(orjson.dumps({'type': 'Feature', 'tippecanoe': tc, 'properties': props, 'geometry': geom}) + b'\n')
         self.n += 1
+
+    def write_split(self, layer, minzoom, props, geom, low_keys, split=11):
+        """Features visible below `split` get a stripped low-zoom copy (only `low_keys`), so tippecanoe --coalesce can
+        merge adjacent segments that differ only in name / bridge / layer - attributes no low-zoom style uses."""
+        if minzoom < split:
+            self.write(layer, minzoom, {k: props.get(k) for k in low_keys}, geom, maxzoom=split - 1)
+            self.write(layer, split, props, geom)
+        else:
+            self.write(layer, minzoom, props, geom)
 
 
 def area_km2(g):
@@ -232,7 +243,7 @@ def roads(out):
             continue
         if p.get('access') in ('private', 'no') and props['class'] in ('minor', 'service', 'track'):
             mz = max(mz, 13)
-        out.write('road', mz, props, g)
+        out.write_split('road', mz, props, g, ('class', 'link', 'net', 'num', 'rough', 'minor'))
 
 
 # ------------------------------------------------------------------ water & waterways
@@ -255,7 +266,7 @@ def waters(out, labels_out):
                     props['inter'] = 1
                 if p.get('tunnel') in ('culvert', 'yes'):
                     continue
-                out.write('waterway', mz, props, g)
+                out.write_split('waterway', mz, props, g, ('class', 'inter'), split=10)
             elif p.get('natural') in ('bay', 'strait') and p.get('name'):
                 labels_out.write('label_line', 9, {'kind': p['natural'], 'name': p['name'], 'rank': 5}, g)
             continue
@@ -325,6 +336,9 @@ LAND_CLASS = {
 }
 ORDER = ['boundary', 'leisure', 'amenity', 'aeroway', 'tourism', 'man_made', 'military', 'natural', 'landuse']
 LAND_AREA = [(50, 4), (8, 6), (2, 7), (0.5, 8), (0.1, 9), (0.03, 10), (0.008, 11), (0.002, 12), (0, 13)]
+# built-up classes are block-sized and numerous in cities; they come in a zoom later than natural cover
+URBAN = {'residential', 'commercial', 'industrial', 'school', 'hospital', 'cemetery', 'stadium', 'prison', 'apron'}
+URBAN_AREA = [(8, 7), (2, 8), (0.5, 9), (0.12, 10), (0.03, 11), (0.006, 12), (0, 13)]
 PARK_LABEL = [(100, 7), (20, 8), (4, 9), (1, 10), (0.2, 11), (0.03, 12), (0.005, 13), (0, 14)]
 LABEL_KINDS = {'park': 'park', 'protected': 'park', 'golf': 'golf', 'cemetery': 'cemetery', 'school': 'college',
                'hospital': 'hospital', 'military': 'military', 'prison': 'prison', 'zoo': 'zoo', 'stadium': 'stadium',
@@ -357,9 +371,7 @@ def lands(out, labels_out):
         a, s = area_km2(g)
         if a <= 0:
             continue
-        mz = by_area(a, LAND_AREA)
-        if cls == 'residential':
-            mz = max(mz, 8)
+        mz = by_area(a, URBAN_AREA if cls in URBAN else LAND_AREA)
         if cls in ('stadium', 'pier', 'apron') and mz < 11:
             mz = 11
         props = {'class': cls}
@@ -476,6 +488,8 @@ def labels(out):
             if not name:
                 continue
             pop = num(p.get('population')) or 0
+            if pl in ('city', 'town') and name.endswith(' Township'):
+                pl = 'village'  # NJ/PA townships are civil divisions tagged as towns; they aren't real towns
             mz = PLACE_MZ[pl]
             if pl == 'city' and pop and pop < 50000:
                 mz = 6

@@ -86,6 +86,9 @@
     if (document.getElementById('t-3d').checked) map.setTerrain({ source: 'dem', exaggeration: 1.6 });
   };
 
+  const unitLabel = () => { document.getElementById('contour-unit').textContent = styleName === 'swiss' ? '(m)' : '(ft)'; };
+  unitLabel();
+
   // style switcher (Atlas / Swiss)
   const switcher = document.getElementById('styles');
   const markStyle = () => switcher.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.style === styleName));
@@ -98,6 +101,7 @@
     try { localStorage.setItem('atlasStyle', styleName); } catch (err) {}
     const u = new URL(location.href); u.searchParams.set('style', styleName); history.replaceState(null, '', u);
     scale.setUnit(styleName === 'swiss' ? 'metric' : 'imperial');
+    unitLabel();
     map.setStyle(STYLES[styleName](), { diff: false });
     map.once('style.load', applyToggles);
   });

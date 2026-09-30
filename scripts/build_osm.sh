@@ -23,9 +23,11 @@ for r in us-northeast us-south; do
 done
 # the two extracts overlap along the PA/MD/DE borders with differing object versions; merge, then keep only the
 # newest version of each object (time-filter treats the merged file as history)
-osmium merge --overwrite -o $O/merged.osm.pbf $O/clip-us-northeast.osm.pbf $O/clip-us-south.osm.pbf
-osmium time-filter -O -o $O/region.osm.pbf $O/merged.osm.pbf
-rm $O/merged.osm.pbf
+if [ ! -f $O/region.osm.pbf ]; then   # delete region.osm.pbf to force a re-merge
+  osmium merge --overwrite -o $O/merged.osm.pbf $O/clip-us-northeast.osm.pbf $O/clip-us-south.osm.pbf
+  osmium time-filter -O -o $O/region.osm.pbf $O/merged.osm.pbf
+  rm $O/merged.osm.pbf
+fi
 
 osmium tags-filter -O -o $O/f_roads.osm.pbf $O/region.osm.pbf w/highway w/railway=rail,light_rail,subway,tram,narrow_gauge \
   w/route=ferry w/aeroway=runway,taxiway n/highway=motorway_junction
@@ -51,12 +53,13 @@ for w in roads water land labels ocean; do python3 scripts/build_osm.py $w & don
 wait
 rm -f $O/e_*.geojsonl
 
-# lines: merge touching segments with identical attributes; polygons: keep shared borders consistent
+# lines: merge touching segments with identical attributes; polygons: keep shared borders consistent.
+# -S4 --simplify-only-low-zooms: ~0.5 device px tolerance below z14 (default is ~1/16 px), full detail at z14.
 T=build/tippecanoe/tippecanoe
 $T -q -f -o $O/lines.pmtiles -P -Z4 -z14 -r1 --no-feature-limit --no-tile-size-limit --coalesce --reorder \
-  --simplification=2 -n lines $O/t_roads.geojsonl
+  --simplification=4 --simplify-only-low-zooms -n lines $O/t_roads.geojsonl
 $T -q -f -o $O/base.pmtiles -P -Z0 -z14 -r1 --no-feature-limit --no-tile-size-limit --detect-shared-borders \
-  --simplification=2 --no-tiny-polygon-reduction-at-maximum-zoom -n base $O/t_water.geojsonl $O/t_land.geojsonl $O/t_ocean.geojsonl
+  --simplification=4 --simplify-only-low-zooms --no-tiny-polygon-reduction-at-maximum-zoom -n base $O/t_water.geojsonl $O/t_land.geojsonl $O/t_ocean.geojsonl
 $T -q -f -o $O/labels.pmtiles -P -Z4 -z14 -r1 --no-feature-limit --no-tile-size-limit -n labels $O/t_labels.geojsonl
 build/tippecanoe/tile-join -q -f --no-tile-size-limit -n 'Tri-State Atlas' \
   -A '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' \

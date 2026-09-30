@@ -322,7 +322,12 @@ function buildAtlasStyle(opts) {
     { 'text-color': '#4a423a' });
   place('place-village', ['village'], { 'icon-image': 'dot-village', 'text-font': F.sansM }, {});
   place('place-town', ['town'], { 'icon-image': 'dot-town', 'text-font': F.sansSB }, { 'text-halo-width': 1.6 });
-  place('place-city', ['city'], { 'icon-image': 'dot-city', 'text-font': F.serifB, 'text-radial-offset': 0.6 }, { 'text-halo-width': 1.8 });
+  // cities scale with population: New York / Philadelphia read as the anchors of the map
+  const POP = ['coalesce', ['get', 'pop'], 0];
+  place('place-city', ['city'], { 'icon-image': 'dot-city', 'text-font': F.serifB, 'text-radial-offset': 0.6,
+    'text-size': Z(6, ['case', ['>=', POP, 1e6], 17, ['>=', POP, 2e5], 13.5, 12], 9, ['case', ['>=', POP, 1e6], 21, ['>=', POP, 2e5], 16.5, 15],
+      12, ['case', ['>=', POP, 1e6], 26, ['>=', POP, 2e5], 21, 20], 15, ['case', ['>=', POP, 1e6], 28, 24]),
+    'text-letter-spacing': ['case', ['>=', POP, 1e6], 0.06, 0] }, { 'text-halo-width': 1.8 });
 
   // counties, states, seas
   sym('county-label', ATL, 'county_label', null,
