@@ -180,6 +180,9 @@ function buildSwissStyle(opts) {
       'text-offset': [0.7, 0], 'text-optional': true }, { 'text-color': C.rail });
   sym('label-airport', OSM, 'label', eq('kind', 'airport'),
     { 'text-field': ['step', ['zoom'], ['coalesce', ['get', 'iata'], ''], 11, ['get', 'name']], 'text-font': F.csb, 'text-size': 11.5 }, {});
+  sym('county-label', ATL, 'county_label', null,
+    { 'text-field': ['upcase', ['get', 'name']], 'text-font': F.cm, 'text-size': Z(7, 9.5, 10, 12), 'text-letter-spacing': 0.2,
+      'symbol-sort-key': ['-', 0, ['get', 'area']], 'text-padding': 12 }, { 'text-color': C.canton }, { maxzoom: 11 });
   G('gnis-locality', ['locality'], { 'text-font': F.cr, 'text-size': Z(11, 10, 14, 11.5) }, { 'text-color': '#3a3a3a' });
   const PSZ = ['match', ['get', 'class'], 'city', Z(6, 13, 10, 18, 14, 24), 'town', Z(7, 10.5, 11, 14, 14, 17),
     'village', Z(9, 10, 13, 13), 'suburb', Z(11, 11, 15, 14), Z(11, 9.5, 15, 12)];
@@ -194,9 +197,6 @@ function buildSwissStyle(opts) {
     { 'icon-image': ['step', ['zoom'], 'sw-city', 11, ''], 'text-field': ['get', 'name'], 'text-font': F.b,
       'text-size': Z(6, 13, 10, 18, 14, 24), 'text-variable-anchor': ['left', 'right', 'top', 'bottom'], 'text-radial-offset': 0.6,
       'symbol-sort-key': RANK }, { 'text-halo-width': 1.6 });
-  sym('county-label', ATL, 'county_label', null,
-    { 'text-field': ['upcase', ['get', 'name']], 'text-font': F.cm, 'text-size': Z(7, 9.5, 10, 12), 'text-letter-spacing': 0.2,
-      'symbol-sort-key': ['-', 0, ['get', 'area']], 'text-padding': 12 }, { 'text-color': C.canton }, { maxzoom: 11 });
   sym('ocean-label', 'labels', null, eq('k', 'sea'),
     { 'text-field': ['get', 'name'], 'text-font': F.it, 'text-size': ['get', 'size'], 'text-letter-spacing': 0.3, 'text-max-width': 30 },
     { 'text-color': C.waterText });

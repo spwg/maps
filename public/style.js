@@ -303,6 +303,11 @@ function buildAtlasStyle(opts) {
     { 'text-field': ['step', ['zoom'], ['coalesce', ['get', 'iata'], ''], 11, ['get', 'name']], 'text-font': F.sansSB,
       'text-size': Z(8, 10, 13, 12), 'text-max-width': 9, 'symbol-sort-key': RANK }, { 'text-color': '#56506a' });
 
+  sym('county-label', ATL, 'county_label', null,
+    { 'text-field': ['step', ['zoom'], ['upcase', ['get', 'name']], 9, ['concat', ['upcase', ['get', 'name']], '\n', ['upcase', ['get', 'suffix']]]],
+      'text-font': F.sansM, 'text-size': Z(7, 9.5, 10, 12), 'text-letter-spacing': 0.22, 'text-line-height': 1.3,
+      'text-max-width': 20, 'symbol-sort-key': ['-', 0, ['get', 'area']], 'text-padding': 12 },
+    { 'text-color': '#8d7a92', 'text-halo-width': 1.6 }, { maxzoom: 11.5 });
   // places: GNIS localities first (lowest priority), then OSM hierarchy
   G('gnis-locality', ['locality'], { 'icon-image': 'dot-hamlet', 'text-font': F.sans, 'text-size': Z(11, 10, 14, 12),
     'text-variable-anchor': ['left', 'right', 'top', 'bottom'], 'text-radial-offset': 0.55, 'text-max-width': 9 },
@@ -330,11 +335,6 @@ function buildAtlasStyle(opts) {
     'text-letter-spacing': ['case', ['>=', POP, 1e6], 0.06, 0] }, { 'text-halo-width': 1.8 });
 
   // counties, states, seas
-  sym('county-label', ATL, 'county_label', null,
-    { 'text-field': ['step', ['zoom'], ['upcase', ['get', 'name']], 9, ['concat', ['upcase', ['get', 'name']], '\n', ['upcase', ['get', 'suffix']]]],
-      'text-font': F.sansM, 'text-size': Z(7, 9.5, 10, 12), 'text-letter-spacing': 0.22, 'text-line-height': 1.3,
-      'text-max-width': 20, 'symbol-sort-key': ['-', 0, ['get', 'area']], 'text-padding': 12 },
-    { 'text-color': '#8d7a92', 'text-halo-width': 1.6 }, { maxzoom: 11.5 });
   sym('ocean-label', 'labels', null, eq('k', 'sea'),
     { 'text-field': ['get', 'name'], 'text-font': F.serifI, 'text-size': ['get', 'size'], 'text-letter-spacing': 0.3,
       'text-max-width': 30, 'text-line-height': 1.4 }, { 'text-color': C.waterText, 'text-halo-color': C.waterHalo });

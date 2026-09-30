@@ -10,7 +10,7 @@ units) and **Swiss** (drawn after the swisstopo national map, metric).
 
 | File | What | Where it lives |
 |---|---|---|
-| `public/data/osm.pmtiles` (~500 MB) | Custom OSM basemap: water, landuse, roads, waterways, places, labels, ridge/valley lines, exit numbers | **Object storage** (not git) |
+| `public/data/osm.pmtiles` (~640 MB) | Custom OSM basemap: water, landuse, roads, waterways, places, labels, ridge/valley lines, exit numbers | **Object storage** (not git) |
 | `public/data/atlas.pmtiles` (~12 MB) | USGS GNIS names (77k), county / town / state boundaries | git |
 | `public/data/search.json` (~4 MB) | Search index | git |
 | `public/fonts/`, `public/lib/` | Self-hosted glyphs (PT Serif, Fira Sans Condensed), MapLibre / PMTiles / maplibre-contour | git |
