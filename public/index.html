@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tri-State Atlas</title>
+<meta name="description" content="A dense, atlas-style map of New York, New Jersey, Connecticut and Pennsylvania — every named summit, ridge, gap, valley and hamlet.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%227%22 fill=%22%23b3d2e6%22/%3E%3Cpath d=%22M3 11l3-5 2 3 1.5-2L13 11z%22 fill=%22%235b4029%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="lib/maplibre-gl.css">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans+Condensed:ital,wght@0,400;0,500;0,600;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root { --paper: #fbf9f3; --ink: #2a2521; --muted: #7a6f63; --line: #e2dccf; --accent: #3e6d96;
+    --shadow: 0 1px 2px rgba(60,45,30,.12), 0 4px 16px rgba(60,45,30,.12); }
+  html, body { margin: 0; height: 100%; background: #ebe6da; font-family: 'Fira Sans Condensed', system-ui, sans-serif; color: var(--ink); }
+  #map { position: absolute; inset: 0; }
+  .panel { position: absolute; background: var(--paper); border-radius: 10px; box-shadow: var(--shadow); }
+  #search { top: 12px; left: 12px; width: min(400px, calc(100vw - 24px)); z-index: 3; }
+  #search .bar { display: flex; align-items: center; gap: 10px; padding: 0 8px 0 14px; height: 46px; }
+  #search .brand { font-family: 'PT Serif', serif; font-weight: 700; font-size: 17px; letter-spacing: .02em; white-space: nowrap; }
+  #search .brand span { color: var(--accent); font-style: italic; font-weight: 400; }
+  #search .sep { width: 1px; height: 22px; background: var(--line); }
+  #q { flex: 1; border: 0; outline: 0; background: transparent; font: inherit; font-size: 15px; color: var(--ink); min-width: 0; }
+  #q::placeholder { color: #a39888; }
+  #results { list-style: none; margin: 0; padding: 4px 0 6px; border-top: 1px solid var(--line); max-height: 60vh; overflow: auto; }
+  #results:empty { display: none; }
+  #results li { padding: 7px 14px; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; font-size: 14.5px; }
+  #results li small { color: var(--muted); font-size: 12px; }
+  #results li .k { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; padding-top: 2px; }
+  #results li.on, #results li:hover { background: #f1ece1; }
+  #layers { right: 12px; bottom: 34px; padding: 10px 12px; font-size: 13.5px; z-index: 2; }
+  #layers summary { list-style: none; cursor: pointer; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  #layers summary::-webkit-details-marker { display: none; }
+  #layers summary::after { content: ' ▾'; }
+  #layers details:not([open]) summary::after { content: ' ▸'; }
+  #layers label { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; user-select: none; }
+  #layers label:first-of-type { margin-top: 6px; }
+  #layers input { accent-color: #3e6d96; margin: 0; }
+  #coords { position: absolute; left: 12px; bottom: 8px; z-index: 2; font-size: 12px; color: #5d5349; background: rgba(251,249,243,.85);
+    padding: 3px 8px; border-radius: 6px; font-variant-numeric: tabular-nums; pointer-events: none; }
+  #coords:empty { display: none; }
+  .maplibregl-ctrl-bottom-left { bottom: 30px; }
+  .maplibregl-ctrl-scale { background: rgba(251,249,243,.85); border-color: #6d6158; color: #4a423a; font-family: inherit; }
+  .maplibregl-ctrl-group { border-radius: 10px !important; box-shadow: var(--shadow) !important; }
+  .maplibregl-ctrl-attrib { font-size: 11px; background: rgba(251,249,243,.8) !important; }
+  .maplibregl-popup-content { font-family: 'Fira Sans Condensed', sans-serif; border-radius: 10px; padding: 10px 14px; box-shadow: var(--shadow); background: var(--paper); }
+  .maplibregl-popup-tip { border-top-color: var(--paper) !important; border-bottom-color: var(--paper) !important; }
+  .pop .n { font-family: 'PT Serif', serif; font-weight: 700; font-size: 16px; }
+  .pop .k { color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: 11.5px; margin-top: 2px; }
+  .pop .d { font-size: 13px; margin-top: 4px; color: #4a423a; }
+  .pop .w { font-size: 12.5px; margin-top: 2px; color: var(--muted); }
+  .pop div:empty { display: none; }
+  @media (max-width: 600px) { #layers { bottom: 70px; } #search .brand, #search .sep { display: none; } }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="search" class="panel">
+  <div class="bar"><div class="brand">Tri-State <span>Atlas</span></div><div class="sep"></div>
+    <input id="q" type="search" placeholder="Search 60,000 places, peaks, valleys…" autocomplete="off" spellcheck="false" aria-label="Search places"></div>
+  <ul id="results"></ul>
+</div>
+<div id="layers" class="panel">
+  <details open>
+    <summary>Layers</summary>
+    <label><input type="checkbox" id="t-hill" checked> Relief shading</label>
+    <label><input type="checkbox" id="t-contour" checked> Contour lines (ft)</label>
+    <label><input type="checkbox" id="t-land" checked> Land cover &amp; parks</label>
+    <label><input type="checkbox" id="t-bnd" checked> Boundaries</label>
+    <label><input type="checkbox" id="t-bld" checked> Buildings</label>
+    <label><input type="checkbox" id="t-mask" checked> Fade outside region</label>
+    <label><input type="checkbox" id="t-3d"> 3D terrain</label>
+  </details>
+</div>
+<div id="coords"></div>
+<script src="lib/maplibre-gl.js"></script>
+<script src="lib/pmtiles.js"></script>
+<script src="lib/maplibre-contour.min.js"></script>
+<script>window.ATLAS_V = "1";</script>
+<script src="icons.js"></script>
+<script src="style.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

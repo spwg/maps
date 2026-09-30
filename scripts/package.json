@@ -1,0 +1,13 @@
+{
+  "name": "tristate-atlas-build",
+  "private": true,
+  "description": "Build tooling for Tri-State Atlas (not needed at deploy time; public/ is committed)",
+  "scripts": {
+    "vendor": "node vendor.js"
+  },
+  "dependencies": {
+    "maplibre-gl": "^5.0.0",
+    "maplibre-contour": "^0.1.0",
+    "pmtiles": "^4.0.0"
+  }
+}
