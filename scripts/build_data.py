@@ -1,14 +1,14 @@
 """Build the overlay data for Tri-State Atlas.
 
 Inputs (downloaded into build/raw by scripts/fetch.sh):
-  - USGS GNIS Domestic Names for NY, NJ, CT, PA
-  - Census cartographic boundary files (states, counties)
+  - USGS GNIS Domestic Names for every state within the region circle (scripts/region.py)
+  - Census cartographic boundary files (states, counties, county subdivisions)
   - AWS terrain tiles (terrarium), sampled for summit elevations
 
 Outputs:
   - build/names.geojsonl   -> tippecanoe -> public/data/atlas.pmtiles (layer "names")
-  - build/county.geojsonl  -> tippecanoe -> public/data/atlas.pmtiles (layers "county", "county_label")
-  - public/data/region.geojson  (outer mask + state outline)
+  - build/county.geojsonl  -> tippecanoe -> public/data/atlas.pmtiles (layers "county", "county_label", "town")
+  - public/data/region.geojson  (fade mask around the region circle)
   - public/data/search.json     (compact search index)
 """
 import csv, glob, io, json, math, os, re, sys, urllib.request
@@ -18,7 +18,10 @@ import numpy as np
 import shapefile
 from PIL import Image
 from shapely.geometry import shape, mapping, Polygon, MultiPolygon
-from shapely.ops import unary_union
+from shapely.ops import unary_union, linemerge
+
+sys.path.insert(0, os.path.dirname(__file__))
+import region as R
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 RAW = os.path.join(ROOT, 'build', 'raw')
@@ -26,7 +29,8 @@ BUILD = os.path.join(ROOT, 'build')
 PUB = os.path.join(ROOT, 'public', 'data')
 os.makedirs(PUB, exist_ok=True)
 
-STATES = {'36': 'NY', '34': 'NJ', '09': 'CT', '42': 'PA'}
+STATES = {fips: code for code, fips in R.STATES.items()}
+DATA = R.circle(R.DATA_MI)
 
 # ------------------------------------------------------------------ boundaries
 def shapes(name, keep):
@@ -37,43 +41,64 @@ def shapes(name, keep):
         if keep(rec):
             yield rec, shape(sr.shape.__geo_interface__)
 
-states = {rec['STUSPS']: g for rec, g in shapes('cb_2023_us_state_500k', lambda r: r['STATEFP'] in STATES)}
-region = unary_union(list(states.values()))
-M_PER_DEG = 111_320
-
-def ring_coords(g, tol):
-    g = g.simplify(tol, preserve_topology=True)
-    polys = [g] if isinstance(g, Polygon) else list(g.geoms)
-    return [[[round(x, 4), round(y, 4)] for x, y in p.exterior.coords] for p in polys if p.area > 1e-4]
-
-inner = region.buffer(0.02).buffer(-0.01)                  # hug the coast a little
-outer = region.buffer(0.12)
 world = [[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]]
-hard = [world] + [list(reversed(r)) for r in ring_coords(outer, 0.01)]
-soft_outer = ring_coords(outer, 0.01)
-soft_inner = ring_coords(inner, 0.005)
+hard = R.ring_coords(R.HARD_MI)
+soft = R.ring_coords(R.SOFT_MI)
 region_fc = {'type': 'FeatureCollection', 'features': [
-    {'type': 'Feature', 'properties': {'k': 'hard'}, 'geometry': {'type': 'Polygon', 'coordinates': hard}},
-    {'type': 'Feature', 'properties': {'k': 'soft'}, 'geometry': {'type': 'MultiPolygon',
-        'coordinates': [[o] + [list(reversed(i)) for i in soft_inner if Polygon(i).within(Polygon(o))] for o in soft_outer]}},
+    {'type': 'Feature', 'properties': {'k': 'hard'}, 'geometry': {'type': 'Polygon', 'coordinates': [world, list(reversed(hard))]}},
+    {'type': 'Feature', 'properties': {'k': 'soft'}, 'geometry': {'type': 'Polygon', 'coordinates': [hard, list(reversed(soft))]}},
+    {'type': 'Feature', 'properties': {'k': 'edge'}, 'geometry': {'type': 'LineString', 'coordinates': R.ring_coords(R.RADIUS_MI)}},
 ]}
 with open(os.path.join(PUB, 'region.geojson'), 'w') as f:
     json.dump(region_fc, f, separators=(',', ':'))
-print('region: bounds', [round(v, 2) for v in region.bounds])
+print('region: %d mi circle around' % R.RADIUS_MI, R.CENTER, 'bounds', [round(v, 2) for v in DATA.bounds])
 
 # counties: boundary lines + label points (planning regions for CT)
 with open(os.path.join(BUILD, 'county.geojsonl'), 'w') as f:
     for rec, g in shapes('cb_2023_us_county_500k', lambda r: r['STATEFP'] in STATES):
+        if not g.intersects(DATA):
+            continue
         name = rec['NAME'] if rec['STUSPS'] != 'CT' else rec['NAMELSAD'].replace(' Planning Region', '')
         suffix = 'Planning Region' if rec['STUSPS'] == 'CT' else 'County'
         area_km2 = rec['ALAND'] / 1e6
         g2 = g.simplify(0.0005, preserve_topology=True)
         f.write(json.dumps({'type': 'Feature', 'tippecanoe': {'layer': 'county', 'minzoom': 6},
-                            'properties': {'name': name}, 'geometry': mapping(g2.boundary)}) + '\n')
-        pt = g.representative_point() if not g.contains(g.centroid) else g.centroid
+                            'properties': {'name': name}, 'geometry': mapping(g2.boundary.intersection(DATA))}) + '\n')
+        inside = g.intersection(R.circle(R.RADIUS_MI))
+        if inside.is_empty or inside.area < g.area * 0.3:
+            continue  # mostly outside the map: boundary only, no label
+        pt = inside.representative_point() if not inside.contains(inside.centroid) else inside.centroid
         f.write(json.dumps({'type': 'Feature', 'tippecanoe': {'layer': 'county_label', 'minzoom': 7 if area_km2 > 600 else 8},
                             'properties': {'name': name, 'suffix': suffix, 'state': rec['STUSPS'], 'area': round(area_km2)},
                             'geometry': {'type': 'Point', 'coordinates': [round(pt.x, 5), round(pt.y, 5)]}}) + '\n')
+
+    # state borders: shared edges of the unclipped TIGER polygons, so water borders (Hudson, LI Sound) are included
+    tl = {rec['STUSPS']: g.simplify(0.0003, preserve_topology=True)
+          for rec, g in shapes('tl_2023_us_state', lambda r: r['STATEFP'] in STATES)}
+    codes = sorted(tl)
+    for i, a in enumerate(codes):
+        for b in codes[i + 1:]:
+            if not tl[a].intersects(tl[b]):
+                continue
+            edge = tl[a].boundary.intersection(tl[b].boundary).intersection(DATA)
+            parts = [x for x in getattr(edge, 'geoms', [edge]) if x.geom_type in ('LineString', 'MultiLineString')]
+            edge = unary_union(parts) if parts else None
+            if edge is not None and edge.geom_type == 'MultiLineString':
+                edge = linemerge(edge)
+            if edge is None or edge.is_empty or edge.length < 1e-4:
+                continue
+            f.write(json.dumps({'type': 'Feature', 'tippecanoe': {'layer': 'state', 'minzoom': 4},
+                                'properties': {'pair': a + '-' + b}, 'geometry': mapping(edge)}) + '\n')
+
+    # towns / townships / boroughs (county subdivisions): fine boundary lines at z10+
+    for fips in sorted(STATES):
+        for rec, g in shapes(f'cb_2023_{fips}_cousub_500k', lambda r: True):
+            if rec['NAME'].startswith('County subdivisions not defined') or not g.intersects(DATA):
+                continue
+            b = g.simplify(0.0002, preserve_topology=True).boundary.intersection(DATA)
+            if not b.is_empty:
+                f.write(json.dumps({'type': 'Feature', 'tippecanoe': {'layer': 'town', 'minzoom': 10},
+                                    'properties': {}, 'geometry': mapping(b)}) + '\n')
 
 # ------------------------------------------------------------------ GNIS
 KIND = {
@@ -110,7 +135,7 @@ for fn in sorted(glob.glob(os.path.join(RAW, 'Text', 'DomesticNames_*.txt'))):
             lat, lon = float(r['prim_lat_dec']), float(r['prim_long_dec'])
         except ValueError:
             continue
-        if lat == 0 or lon == 0:
+        if lat == 0 or lon == 0 or R.dist_mi(lon, lat) > R.DATA_MI:
             continue
         key = (name, kind, round(lon, 3), round(lat, 3))
         if key in seen:
@@ -211,6 +236,8 @@ with open(os.path.join(BUILD, 'names.geojsonl'), 'w') as f:
 
 # counties in search too
 for rec, g in shapes('cb_2023_us_county_500k', lambda r: r['STATEFP'] in STATES):
+    if not g.intersects(R.circle(R.RADIUS_MI)):
+        continue
     pt = g.representative_point()
     nm = rec['NAMELSAD']
     search.append([nm, 'county', round(pt.x, 5), round(pt.y, 5), -20000, rec['STUSPS']])

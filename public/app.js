@@ -11,41 +11,56 @@
   const region = await fetch('data/region.geojson').then(r => r.json());
   const pt = (props, coords) => ({ type: 'Feature', properties: props, geometry: { type: 'Point', coordinates: coords } });
   const labels = { type: 'FeatureCollection', features: [
-    pt({ k: 'sea', name: 'A T L A N T I C\nO C E A N', size: 20 }, [-72.9, 39.9]),
+    pt({ k: 'sea', name: 'A T L A N T I C\nO C E A N', size: 20 }, [-72.3, 39.6]),
     pt({ k: 'sea', name: 'ATLANTIC OCEAN', size: 14 }, [-73.3, 40.45]),
     pt({ k: 'sea', name: 'New York Bight', size: 13 }, [-73.72, 40.2]),
     pt({ k: 'sea', name: 'Long Island Sound', size: 14 }, [-73.05, 41.08]),
     pt({ k: 'sea', name: 'Block Island Sound', size: 12 }, [-71.85, 41.2]),
+    pt({ k: 'sea', name: 'Rhode Island Sound', size: 12 }, [-71.3, 41.33]),
     pt({ k: 'sea', name: 'Delaware Bay', size: 13 }, [-75.15, 39.08]),
-    pt({ k: 'sea', name: 'Lake Erie', size: 16 }, [-80.0, 42.35]),
-    pt({ k: 'sea', name: 'Lake Ontario', size: 17 }, [-77.4, 43.6]),
-    pt({ k: 'state', name: 'NEW YORK' }, [-75.3, 42.6]),
-    pt({ k: 'state', name: 'PENNSYLVANIA' }, [-77.6, 40.95]),
+    pt({ k: 'sea', name: 'Chesapeake Bay', size: 13 }, [-76.25, 38.9]),
+    pt({ k: 'state', name: 'NEW YORK' }, [-74.9, 42.35]),
+    pt({ k: 'state', name: 'PENNSYLVANIA' }, [-76.4, 40.75]),
     pt({ k: 'state', name: 'NEW JERSEY' }, [-74.55, 40.25]),
     pt({ k: 'state', name: 'CONNECTICUT' }, [-72.7, 41.62]),
+    pt({ k: 'state', name: 'MASSACHUSETTS' }, [-72.3, 42.35]),
+    pt({ k: 'state', name: 'RHODE ISLAND' }, [-71.55, 41.72]),
+    pt({ k: 'state', name: 'VERMONT' }, [-72.8, 43.1]),
+    pt({ k: 'state', name: 'NEW HAMPSHIRE' }, [-71.9, 43.0]),
+    pt({ k: 'state', name: 'DELAWARE' }, [-75.5, 39.1]),
+    pt({ k: 'state', name: 'MARYLAND' }, [-76.8, 39.45]),
   ] };
 
-  const style = buildAtlasStyle({
-    demUrl: demSource.sharedDemProtocolUrl,
-    contourUrl: demSource.contourProtocolUrl({
-      multiplier: 3.28084,
-      thresholds: { 9: [500, 2500], 10: [400, 2000], 11: [200, 1000], 12: [100, 500], 13: [50, 250], 14: [40, 200], 15: [20, 100] },
-      contourLayer: 'contours', elevationKey: 'ele', levelKey: 'level', extent: 4096, buffer: 1,
-    }),
-    region, labels,
-  });
+  // Where the big OSM basemap lives. Set window.ATLAS_CONFIG.osmTiles in config.js to an object-storage URL in production.
+  const cfg = window.ATLAS_CONFIG || {};
+  const common = { demUrl: demSource.sharedDemProtocolUrl, region, labels, osmTiles: cfg.osmTiles || 'data/osm.pmtiles' };
+  const contourOpts = { contourLayer: 'contours', elevationKey: 'ele', levelKey: 'level', extent: 4096, buffer: 1 };
+  const STYLES = {
+    atlas: () => buildAtlasStyle(Object.assign({}, common, {
+      contourUrl: demSource.contourProtocolUrl(Object.assign({ multiplier: 3.28084,
+        thresholds: { 9: [500, 2500], 10: [400, 2000], 11: [200, 1000], 12: [100, 500], 13: [50, 250], 14: [40, 200], 15: [20, 100] } }, contourOpts)),
+    })),
+    swiss: () => buildSwissStyle(Object.assign({}, common, {
+      contourUrl: demSource.contourProtocolUrl(Object.assign({ multiplier: 1,
+        thresholds: { 11: [50, 250], 12: [20, 100], 13: [20, 100], 14: [10, 50], 15: [10, 50] } }, contourOpts)),
+    })),
+  };
+  const qs = new URLSearchParams(location.search);
+  const stored = (() => { try { return localStorage.getItem('atlasStyle'); } catch (e) { return null; } })();
+  let styleName = STYLES[qs.get('style')] ? qs.get('style') : STYLES[stored] ? stored : 'atlas';
 
   const map = new maplibregl.Map({
-    container: 'map', style, hash: true,
-    center: [-74.2, 40.95], zoom: 8.2, minZoom: 5.5, maxZoom: 18.5,
-    maxBounds: [[-84.5, 36.5], [-68.0, 47.5]],
+    container: 'map', style: STYLES[styleName](), hash: true,
+    center: [-74.1, 40.85], zoom: 8.3, minZoom: 5.5, maxZoom: 18.5,
+    maxBounds: [[-82.0, 35.5], [-66.0, 46.0]],
     fadeDuration: 120, attributionControl: { compact: true },
   });
   window.map = map;
-  installIcons(map);
+  map.on('style.load', () => installIcons(map));
   map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
   map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), 'top-right');
-  map.addControl(new maplibregl.ScaleControl({ unit: 'imperial', maxWidth: 110 }), 'bottom-left');
+  const scale = new maplibregl.ScaleControl({ unit: styleName === 'swiss' ? 'metric' : 'imperial', maxWidth: 110 });
+  map.addControl(scale, 'bottom-left');
 
   // coordinates readout
   const coords = document.getElementById('coords');
@@ -66,6 +81,26 @@
     const el = document.getElementById(id);
     el.addEventListener('change', () => setVis(pred, el.checked));
   }
+  const applyToggles = () => {
+    for (const [id, pred] of Object.entries(toggles)) if (!document.getElementById(id).checked) setVis(pred, false);
+    if (document.getElementById('t-3d').checked) map.setTerrain({ source: 'dem', exaggeration: 1.6 });
+  };
+
+  // style switcher (Atlas / Swiss)
+  const switcher = document.getElementById('styles');
+  const markStyle = () => switcher.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.style === styleName));
+  markStyle();
+  switcher.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b || b.dataset.style === styleName) return;
+    styleName = b.dataset.style;
+    markStyle();
+    try { localStorage.setItem('atlasStyle', styleName); } catch (err) {}
+    const u = new URL(location.href); u.searchParams.set('style', styleName); history.replaceState(null, '', u);
+    scale.setUnit(styleName === 'swiss' ? 'metric' : 'imperial');
+    map.setStyle(STYLES[styleName](), { diff: false });
+    map.once('style.load', applyToggles);
+  });
 
   // 3D terrain toggle
   const t3d = document.getElementById('t-3d');
@@ -92,22 +127,29 @@
     protected_area: 'Protected area', state_park: 'State park', attraction: 'Attraction', museum: 'Museum',
     college: 'College', hospital: 'Hospital', stadium: 'Stadium', zoo: 'Zoo', lighthouse: 'Lighthouse', campsite: 'Campground',
     motorway: 'Highway', trunk: 'Highway', primary: 'Road', secondary: 'Road', tertiary: 'Road', minor: 'Street',
-    service: 'Service road', track: 'Track', path: 'Trail' };
-  const LAYER_KIND = { park: 'Park / protected land', mountain_peak: 'Summit', aerodrome_label: 'Airport',
-    transportation_name: 'Road', water_name: 'Water', waterway: 'Waterway', county_label: 'County', contours: 'Contour' };
+    service: 'Service road', track: 'Track', path: 'Trail', pedestrian: 'Pedestrian way', camp: 'Campground',
+    themepark: 'Theme park', aquarium: 'Aquarium', historic: 'Historic site', observatory: 'Observatory',
+    university: 'University', library: 'Library', townhall: 'Town hall', courthouse: 'Courthouse', ferry: 'Ferry terminal',
+    airport: 'Airport', station: 'Station', marina: 'Marina', winery: 'Winery', golf: 'Golf course', cemetery: 'Cemetery',
+    cave: 'Cave', hill: 'Hill', prison: 'Prison', strait: 'Strait', viewpoint: 'Viewpoint', rail: 'Railway',
+    light: 'Light rail', subway: 'Subway', reservoir: 'Reservoir' };
+  const LAYER_KIND = { waterway: 'Waterway', county_label: 'County', label_line: 'Landform', junction: 'Exit' };
   let popup;
   map.on('click', (e) => {
     const box = [[e.point.x - 6, e.point.y - 6], [e.point.x + 6, e.point.y + 6]];
-    const fs = map.queryRenderedFeatures(box).filter(f => f.layer.type === 'symbol' && f.properties && (f.properties.name || f.properties['name:en']));
+    const fs = map.queryRenderedFeatures(box).filter(f => f.layer.type === 'symbol' && f.properties && (f.properties.name || f.properties.ref));
     if (popup) popup.remove();
     if (!fs.length) return;
     const f = fs[0], p = f.properties;
     let kind = KIND[p.kind] || KIND[p.class] || LAYER_KIND[f.sourceLayer] || '';
     let d = '';
-    if (p.ele_ft) d = Number(p.ele_ft).toLocaleString('en-US') + ' ft · ' + Number(p.ele).toLocaleString('en-US') + ' m';
+    const ft = p.ele_ft && Number(p.ele_ft).toLocaleString('en-US') + ' ft', m = p.ele && Number(p.ele).toLocaleString('en-US') + ' m';
+    if (ft) d = styleName === 'swiss' ? m + ' · ' + ft : ft + ' · ' + m;
+    if (p.pop) d = 'Population ' + Number(p.pop).toLocaleString('en-US');
+    if (f.sourceLayer === 'junction') d = 'Exit ' + p.ref;
     if (p.iata) d = [p.iata, p.icao].filter(Boolean).join(' · ');
     const where = [p.county && (p.county + (p.state === 'CT' ? '' : ' Co.')), p.state].filter(Boolean).join(', ');
-    let name = p['name:en'] || p.name;
+    let name = p.name || p.ref;
     if (f.sourceLayer === 'county_label') name = p.name + ' ' + p.suffix;
     popup = new maplibregl.Popup({ closeButton: false, offset: 8, maxWidth: '280px' }).setLngLat(e.lngLat)
       .setHTML('<div class="pop"><div class="n"></div><div class="k"></div><div class="d"></div><div class="w"></div></div>').addTo(map);

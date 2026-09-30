@@ -1,3 +1,5 @@
 build/
 node_modules/
 .vercel
+public/data/osm.pmtiles
+__pycache__/

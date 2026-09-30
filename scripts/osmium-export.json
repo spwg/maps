@@ -1,0 +1,4 @@
+{ "attributes": { "type": true, "id": true },
+  "format_options": {},
+  "linear_tags": true, "area_tags": true,
+  "exclude_tags": ["tiger:*", "gnis:*", "source*", "created_by", "note*", "fixme", "NHD:*", "nhd:*", "massgis:*", "addr:*", "ref:*", "wikidata", "wikipedia", "chicago:*", "nysgissam:*", "lacounty:*", "hgv*", "maxspeed*", "lanes*", "sidewalk*", "cycleway*", "parking*", "turn:*", "destination*", "old_*", "alt_name*", "not:*", "check_date*", "survey*"] }
