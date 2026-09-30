@@ -21,7 +21,11 @@ for r in us-northeast us-south; do
     rm $O/$r.osm.pbf
   fi
 done
-osmium merge --overwrite -o $O/region.osm.pbf $O/clip-us-northeast.osm.pbf $O/clip-us-south.osm.pbf
+# the two extracts overlap along the PA/MD/DE borders with differing object versions; merge, then keep only the
+# newest version of each object (time-filter treats the merged file as history)
+osmium merge --overwrite -o $O/merged.osm.pbf $O/clip-us-northeast.osm.pbf $O/clip-us-south.osm.pbf
+osmium time-filter -O -o $O/region.osm.pbf $O/merged.osm.pbf
+rm $O/merged.osm.pbf
 
 osmium tags-filter -O -o $O/f_roads.osm.pbf $O/region.osm.pbf w/highway w/railway=rail,light_rail,subway,tram,narrow_gauge \
   w/route=ferry w/aeroway=runway,taxiway n/highway=motorway_junction
